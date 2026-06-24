@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Auction Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Auction">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1a1a1a">
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+  import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAgDcC_B-FI7k5APCswX5t4-WcUawPvUa4",
+    authDomain: "wrang-19cc4.firebaseapp.com",
+    projectId: "wrang-19cc4",
+    storageBucket: "wrang-19cc4.firebasestorage.app",
+    messagingSenderId: "142933556272",
+    appId: "1:142933556272:web:e7d915c509dac7d08141f5"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const lotsCol = collection(db, 'lots');
+
+  window._db = db;
+  window._lotsCol = lotsCol;
+  window._setDoc = setDoc;
+  window._doc = doc;
+  window._deleteDoc = deleteDoc;
+  window._getDocs = getDocs;
+
+  onSnapshot(lotsCol, (snapshot) => {
+    const data = [];
+    snapshot.forEach(d => data.push({ _id: d.id, ...d.data() }));
+    data.sort((a,b) => {
+      // Sort by date descending (dd.mm.yyyy)
+      const parseDate = s => {
+        if (!s) return 0;
+        const p = s.split('.');
+        return p.length === 3 ? new Date(p[2], p[1]-1, p[0]).getTime() : 0;
+      };
+      const diff = parseDate(b.date) - parseDate(a.date);
+      return diff !== 0 ? diff : (b._order || 0) - (a._order || 0);
+    });
+    window.lots = data;
+    if (window.render) window.render();
+    if (window._syncStatus) window._syncStatus('синхронизировано');
+  }, (err) => {
+    if (window._syncStatus) window._syncStatus('ошибка синхронизации');
+  });
+</script>
+<style>
+  :root {
+    --bg: #f5f5f3;
+    --surface: #ffffff;
+    --surface2: #f0efed;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --text: #1a1a1a;
+    --text2: #6b6b6b;
+    --text3: #999;
+    --green: #1a7a4a;
+    --green-bg: #e6f4ed;
+    --red: #b93030;
+    --red-bg: #fdeaea;
+    --amber: #8a5c00;
+    --amber-bg: #fef3dc;
+    --blue: #1a5fa8;
+    --blue-bg: #e8f0fb;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141414;
+      --surface: #1e1e1e;
+      --surface2: #2a2a2a;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.18);
+      --text: #f0f0f0;
+      --text2: #999;
+      --text3: #666;
+      --green: #4ade80;
+      --green-bg: #0d2e1a;
+      --red: #f87171;
+      --red-bg: #2e0d0d;
+      --amber: #fbbf24;
+      --amber-bg: #2e1f00;
+      --blue: #60a5fa;
+      --blue-bg: #0d1e35;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem 3rem; padding-bottom: max(3rem, env(safe-area-inset-bottom)); padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+
+  /* Mobile cards */
+  @media (max-width: 600px) {
+    .wrap { padding: 0.75rem 0.75rem 2rem; padding-bottom: max(2rem, env(--safe-area-inset-bottom)); }
+    .hdr { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 1rem; }
+    .hdr-l .hdr-title { font-size: 17px; }
+    .hdr > div:last-child { flex-direction: row; align-items: flex-start; gap: 8px; }
+    .hdr > div:last-child > div:first-child { flex: 1; }
+    .hdr > div:last-child > div:first-child .rate-box { width: 100%; }
+    .btn { padding: 7px 10px; font-size: 12px; }
+    .sgrid { grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 1rem; }
+    .sc { padding: 10px 12px; }
+    .sc-val { font-size: 17px; }
+    .sc-sub { font-size: 10px; }
+    .parse-box { padding: 12px; margin-bottom: 1rem; }
+    .parse-box textarea { min-height: 80px; font-size: 13px; }
+    .tw { display: none; }
+    .cards { display: block !important; }
+    .modal { margin: 0.5rem; max-height: 92vh; overflow-y: auto; }
+    .mrow { grid-template-columns: 1fr; }
+    .slbl { font-size: 10px; margin-bottom: 8px; }
+  }
+  @media (min-width: 601px) { .cards { display: none !important; } }
+
+  /* Header */
+  .hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 12px; }
+  .hdr-l { display: flex; flex-direction: column; gap: 3px; }
+  .hdr-title { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  .hdr-sub { font-size: 12px; color: var(--text2); }
+  .hdr-r { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  /* Rate box */
+  .rate-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .rate-box { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 13px; }
+  .rate-box input { width: 56px; font-size: 13px; font-weight: 600; border: none; background: transparent; color: var(--text); text-align: right; outline: none; }
+  .rate-lbl { color: var(--text2); font-size: 12px; }
+  .rate-time { font-size: 10px; color: var(--text3); }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--radius-sm); padding: 7px 13px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: var(--surface); color: var(--text); transition: background 0.15s; }
+  .btn:hover { background: var(--surface2); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn-primary:hover { opacity: 0.85; background: var(--text); }
+  .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Section label */
+  .slbl { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+
+  /* Stats grid */
+  .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 1.5rem; }
+  .sc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .sc-lbl { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .sc-val { font-size: 22px; font-weight: 600; line-height: 1; letter-spacing: -0.5px; }
+  .sc-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+  .sc-val.bad { color: var(--red); }
+  .sc-val.ok { color: var(--green); }
+
+  /* Parse box */
+  .parse-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 1.5rem; }
+  .parse-box textarea { width: 100%; min-height: 90px; resize: vertical; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; outline: none; line-height: 1.5; }
+  .parse-box textarea:focus { border-color: var(--border2); }
+  .parse-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .parse-hint { font-size: 11px; color: var(--text3); flex: 1; }
+  .pr { font-size: 12px; padding: 6px 10px; border-radius: var(--radius-sm); margin-top: 8px; display: none; }
+  .pr.ok { background: var(--green-bg); color: var(--green); display: block; }
+  .pr.err { background: var(--red-bg); color: var(--red); display: block; }
+
+  /* Table */
+  .tw { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+  th { font-size: 10px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; background: var(--surface2); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .lot-name { font-weight: 500; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .bw { background: var(--green-bg); color: var(--green); }
+  .bl { background: var(--red-bg); color: var(--red); }
+  .bp { background: var(--amber-bg); color: var(--amber); }
+  .bs { background: var(--surface2); color: var(--text3); }
+  .gap-up { color: var(--red); }
+  .gap-dn { color: var(--green); }
+  .delbtn { background: none; border: none; cursor: pointer; color: var(--text3); padding: 3px 6px; border-radius: 4px; font-size: 16px; line-height: 1; }
+  .delbtn:hover { color: var(--red); background: var(--red-bg); }
+  .empty td { text-align: center; color: var(--text3); padding: 2.5rem; font-size: 13px; }
+
+  /* Cards (mobile) */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .card-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .card-sold { font-size: 14px; font-weight: 600; color: var(--text); text-align: right; }
+  .card-sold-sub { font-size: 10px; color: var(--text2); text-align: right; margin-top: 1px; }
+  .card-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .card-detail { font-size: 11px; color: var(--text2); }
+  .card-bottom { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); }
+  .card-bid { font-size: 12px; color: var(--text2); }
+  .card-gap { font-size: 12px; font-weight: 600; color: var(--red); }
+  .card-gap.ok { color: var(--green); }
+  .card-gap-pct { font-size: 10px; color: var(--red); margin-left: 3px; }
+  .trim-pill { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 20px; }
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; width: 100%; max-width: 480px; margin: 1rem; }
+  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 1rem; }
+  .mrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .mfield { display: flex; flex-direction: column; gap: 4px; }
+  .mlbl { font-size: 11px; color: var(--text2); }
+  .mfield input, .mfield select { font-size: 13px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface2); color: var(--text); outline: none; }
+  .mfield input:focus, .mfield select:focus { border-color: var(--border2); }
+  .mftr { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+
+  /* Notification toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 200; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="hdr-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:6px"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><rect x="9" y="11" width="14" height="10" rx="2"/><circle cx="12" cy="20" r="1"/><circle cx="20" cy="20" r="1"/></svg>
+        Auction Tracker
+      </div>
+      <div class="hdr-sub">Jeep Wrangler Rubicon / Japan Auction / Cyprus · <span id="syncStatus" style="color:var(--text3)">подключение...</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div class="rate-box">
+          <span class="rate-lbl">Курс</span>
+          <input id="rateInput" type="number" value="184.7" min="100" max="300" step="0.1">
+          <span class="rate-lbl">JPY/€</span>
+        </div>
+        <div style="display:flex;gap:8px;padding-left:2px">
+          <span class="rate-time" id="rateTime">загружаем...</span>
+          <a href="https://www.revolut.com/currency-converter/convert-eur-to-jpy-exchange-rate/" target="_blank" style="font-size:10px;color:var(--text3);text-decoration:none;">↗ Revolut</a>
+        </div>
+      </div>
+      <button class="btn" id="refreshBtn" onclick="fetchRate()" style="align-self:flex-start">
+        <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        Обновить курс
+      </button>
+      <button class="btn btn-primary" onclick="openAdd()" style="align-self:flex-start">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Добавить лот
+      </button>
+    </div>
+  </div>
+
+  <div class="slbl">Итоги по всем ставкам</div>
+  <div class="sgrid" id="sg"></div>
+
+  <div class="slbl" style="margin-top:1.5rem">Вставить сообщения из Telegram</div>
+  <div class="parse-box">
+    <textarea id="tgIn" placeholder="Вставь сообщения от брокера сюда — предложения лотов, подтверждения ставок, результаты аукциона...&#10;&#10;Пример: 80380 HAA Kobe&#10;Start 5 680 000 JPY&#10;02/2025 first reg date, 18 000 km, petrol"></textarea>
+    <div class="parse-row">
+      <span class="parse-hint">Можно вставить несколько сообщений сразу. Парсер понимает предложения, ставки и результаты (sold / not sold).</span>
+      <button class="btn btn-primary" onclick="parseTG()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        Распарсить
+      </button>
+    </div>
+    <div class="pr" id="pr"></div>
+  </div>
+
+  <div class="slbl">История ставок</div>
+  <div class="tw">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:92px">Дата</th>
+          <th style="width:130px">Лот</th>
+          <th style="width:80px">Комплект.</th>
+          <th style="width:68px">Двигатель</th>
+          <th style="width:70px">Рег.</th>
+          <th style="width:60px">КМ</th>
+          <th style="width:100px">Старт JPY</th>
+          <th style="width:95px">Ставка EUR</th>
+          <th style="width:120px">Продана</th>
+          <th style="width:130px">Разрыв</th>
+          <th style="width:90px">Статус</th>
+          <th style="width:36px"></th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+
+  <div class="cards" id="cards" style="display:none"></div>
+
+</div>
+
+<!-- Add/Edit modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Добавить лот вручную</div>
+    <input type="hidden" id="m_id">
+    <div class="mrow">
+      <div class="mfield"><label class="mlbl">Дата</label><input type="date" id="m_d"></div>
+      <div class="mfield"><label class="mlbl">Лот (номер + аукцион)</label><input type="text" id="m_l" placeholder="80380 HAA Kobe"></div>
+      <div class="mfield"><label class="mlbl">Двигатель</label><select id="m_eng"><option value="2.0L">2.0L</option><option value="3.6L">3.6L</option></select></div>
+      <div class="mfield"><label class="mlbl">Комплектация</label><select id="m_trim"><option value="">—</option><option value="Rubicon">Rubicon</option><option value="Sahara">Sahara</option><option value="Sport">Sport</option></select></div>
+      <div class="mfield"><label class="mlbl">Первая рег. (мм/гггг)</label><input type="text" id="m_y" placeholder="02/2025"></div>
+      <div class="mfield"><label class="mlbl">КМ</label><input type="number" id="m_k" placeholder="18000"></div>
+      <div class="mfield"><label class="mlbl">Старт JPY</label><input type="number" id="m_s" placeholder="5680000"></div>
+      <div class="mfield"><label class="mlbl">Ставка EUR</label><input type="number" id="m_be" placeholder="45000"></div>
+      <div class="mfield"><label class="mlbl">Продана JPY (если известно)</label><input type="number" id="m_sold" placeholder=""></div>
+    </div>
+    <div class="mfield"><label class="mlbl">Статус</label>
+      <select id="m_st" style="font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);outline:none">
+        <option value="pending">Ожидаем</option>
+        <option value="win">Выиграли</option>
+        <option value="loss">Не выиграли</option>
+        <option value="skip">Не участвуем</option>
+      </select>
+    </div>
+    <div class="mftr">
+      <button class="btn" onclick="closeAdd()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveManual()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const INIT = [
+  {date:'17.06.2026',lot:'70131 Tokyo',trim:'Rubicon',engine:'2.0L',year:'01/2025',km:10000,start:4900000,bid_eur:45000,bid_jpy:6010000,sold:7540000,status:'loss'},
+  {date:'19.06.2026',lot:'80380 HAA Kobe',trim:'Rubicon',engine:'2.0L',year:'02/2025',km:18000,start:5680000,bid_eur:45000,bid_jpy:5975000,sold:7225000,status:'loss'},
+  {date:'19.06.2026',lot:'82116 HAA Kobe',trim:'Rubicon',engine:'2.0L',year:'09/2025',km:6000,start:4850000,bid_eur:46000,bid_jpy:6110000,sold:7255000,status:'loss'},
+  {date:'22.06.2026',lot:'1006 JU Nagano',trim:'',engine:'2.0L',year:'06/2024',km:3000,start:6400000,bid_eur:0,bid_jpy:0,sold:null,status:'skip'},
+];
+
+window.lots = [];
+
+window._syncStatus = function(msg) {
+  const el = document.getElementById('syncStatus');
+  if (el) { el.textContent = msg; }
+};
+
+async function saveLot(l, index) {
+  if (!window._setDoc || !window._doc || !window._lotsCol) return;
+  const id = l._id || ('lot_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
+  l._id = id;
+  l._order = index;
+  const data = {};
+  Object.keys(l).forEach(k => { if (l[k] !== undefined) data[k] = l[k]; });
+  await window._setDoc(window._doc(window._lotsCol, id), data);
+}
+
+async function save() {
+  for (let i = 0; i < window.lots.length; i++) {
+    await saveLot(window.lots[i], i);
+  }
+}
+
+async function del(id) {
+  if (!confirm('Удалить лот?')) return;
+  if (id && window._deleteDoc && window._doc && window._lotsCol) {
+    await window._deleteDoc(window._doc(window._lotsCol, id));
+  }
+  showToast('Лот удалён');
+}
+
+async function initDB() {
+  if (!window._getDocs || !window._lotsCol) { setTimeout(initDB, 500); return; }
+  const snap = await window._getDocs(window._lotsCol);
+  if (snap.empty) {
+    for (let i = 0; i < INIT.length; i++) {
+      const l = { ...INIT[i], _order: i, _id: 'lot_init_' + i };
+      await window._setDoc(window._doc(window._lotsCol, l._id), l);
+    }
+  }
+}
+setTimeout(initDB, 1000);
+
+function getRate() { return parseFloat(document.getElementById('rateInput').value) || 184.7; }
+function jpy2eur(v) { return v ? Math.round(v / getRate()) : null; }
+function fmtJPY(v) { return v ? (Math.round(v / 1000) + 'к ¥') : '—'; }
+function fmtEUR(v) { return v ? (v.toLocaleString('ru') + ' €') : '—'; }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function fetchRate() {
+  const btn = document.getElementById('refreshBtn');
+  const icon = document.getElementById('refreshIcon');
+  const timeEl = document.getElementById('rateTime');
+  icon.classList.add('spin');
+  btn.disabled = true;
+  let success = false;
+  try {
+    const r = await fetch('https://api.exchangerate-api.com/v4/latest/EUR');
+    const d = await r.json();
+    if (d.rates && d.rates.JPY) {
+      const rate = parseFloat(d.rates.JPY.toFixed(2));
+      document.getElementById('rateInput').value = rate;
+      const now = new Date();
+      const timeStr = `${String(now.getDate()).padStart(2,'0')}.${String(now.getMonth()+1).padStart(2,'0')} в ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+      timeEl.textContent = `обновлено ${timeStr}`;
+      localStorage.setItem('lastRate', JSON.stringify({rate, timeStr}));
+      render();
+      showToast(`Курс обновлён: 1 € = ${rate} ¥`);
+      success = true;
+    }
+  } catch(e) {}
+  if (!success) {
+    try {
+      const r = await fetch('https://open.er-api.com/v6/latest/EUR');
+      const d = await r.json();
+      if (d.rates && d.rates.JPY) {
+        const rate = parseFloat(d.rates.JPY.toFixed(2));
+        document.getElementById('rateInput').value = rate;
+        const now = new Date();
+        const timeStr = `${String(now.getDate()).padStart(2,'0')}.${String(now.getMonth()+1).padStart(2,'0')} в ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+        timeEl.textContent = `обновлено ${timeStr}`;
+        localStorage.setItem('lastRate', JSON.stringify({rate, timeStr}));
+        render();
+        showToast(`Курс обновлён: 1 € = ${rate} ¥`);
+        success = true;
+      }
+    } catch(e) {}
+  }
+  if (!success) {
+    const saved = JSON.parse(localStorage.getItem('lastRate') || 'null');
+    if (saved) {
+      document.getElementById('rateInput').value = saved.rate;
+      timeEl.textContent = `последний: ${saved.timeStr} (нет интернета)`;
+      render();
+    } else {
+      timeEl.textContent = 'введи курс вручную';
+    }
+  }
+  icon.classList.remove('spin');
+  btn.disabled = false;
+}
+
+function renderStats() {
+  const total = window.lots.length;
+  const pending = window.lots.filter(l => l.status === 'pending').length;
+  const withSold = window.lots.filter(l => l.sold && (l.bid_eur || l.bid_jpy));
+  const soldTurnkeys = withSold.map(l => calcTurnkey(l.sold, l.rate_at_bid)).filter(Boolean);
+  const avgSold = soldTurnkeys.length ? Math.round(soldTurnkeys.reduce((a,b) => a+b, 0) / soldTurnkeys.length) : 0;
+  const gaps = withSold.map(l => calcTurnkey(l.sold, l.rate_at_bid) - l.bid_eur).filter(g => g !== 0);
+  const avgGap = gaps.length ? Math.round(gaps.reduce((a,b) => a+b, 0) / gaps.length) : 0;
+  const minGap = gaps.length ? Math.min(...gaps) : 0;
+
+  document.getElementById('sg').innerHTML = `
+    <div class="sc"><div class="sc-lbl">Всего лотов</div><div class="sc-val">${total}</div><div class="sc-sub">${pending} ожидаем</div></div>
+    <div class="sc"><div class="sc-lbl">Ср. цена продажи</div><div class="sc-val">${avgSold ? avgSold.toLocaleString('ru') + ' €' : '—'}</div><div class="sc-sub">под ключ на Кипре</div></div>
+    <div class="sc"><div class="sc-lbl">Ср. разрыв</div><div class="sc-val bad">${avgGap ? '+' + avgGap.toLocaleString('ru') + ' €' : '—'}</div><div class="sc-sub">не хватило</div></div>
+    <div class="sc"><div class="sc-lbl">Мин. разрыв</div><div class="sc-val">${minGap ? '+' + minGap.toLocaleString('ru') + ' €' : '—'}</div><div class="sc-sub">ближайшая попытка</div></div>
+  `;
+}
+
+function calcTurnkey(cnfJpy, rate) {
+  if (!cnfJpy) return null;
+  const r = rate || getRate();
+  const cifEur = cnfJpy / r;
+  return Math.round((cifEur * 1.1 * 1.19 + 1000) * 1.03);
+}
+
+function renderTable() {
+  const tb = document.getElementById('tb');
+  if (!window.lots.length) {
+    tb.innerHTML = '<tr class="empty"><td colspan="11">Нет лотов — вставь сообщения из Telegram или добавь вручную</td></tr>';
+    return;
+  }
+  tb.innerHTML = window.lots.map((l, i) => {
+    const bidEur = l.bid_eur || jpy2eur(l.bid_jpy) || 0;
+    const rate = l.rate_at_bid || getRate();
+    const soldTurnkey = l.sold ? calcTurnkey(l.sold, rate) : null;
+    const soldStr = soldTurnkey
+      ? `<span style="font-weight:500">${soldTurnkey.toLocaleString('ru')} €</span><br><small style="color:var(--text2)">${fmtJPY(l.sold)}</small>`
+      : '—';
+    const gap = (soldTurnkey && bidEur) ? (soldTurnkey - bidEur) : null;
+    const gapPct = (soldTurnkey && bidEur) ? (gap / soldTurnkey * 100) : null;
+    const gapStr = gap !== null
+      ? `<span class="${gap > 0 ? 'gap-up' : 'gap-dn'}">${gap > 0 ? '+' : ''}${gap.toLocaleString('ru')} €<br><small>${gapPct > 0 ? '+' : ''}${gapPct.toFixed(1)}%</small></span>`
+      : '—';
+    const status = l.status !== 'pending' ? l.status : (l.sold ? 'loss' : 'pending');
+    const badge = status === 'win'
+      ? '<span class="badge bw">Выиграли</span>'
+      : status === 'loss'
+      ? '<span class="badge bl">Не выиграли</span>'
+      : status === 'skip'
+      ? '<span class="badge bs">Не участвуем</span>'
+      : '<span class="badge bp">Ожидаем</span>';
+    return `<tr>
+      <td>${l.date}</td>
+      <td class="lot-name">${l.lot}</td>
+      <td>${l.trim ? `<span style="font-size:11px;font-weight:500;padding:2px 7px;border-radius:20px;background:${l.trim==='Rubicon'?'#e8f0fb':'#f0efed'};color:${l.trim==='Rubicon'?'#185fa5':'#555'}">${l.trim}</span>` : '—'}</td>
+      <td>${l.engine || '—'}</td>
+      <td>${l.year || '—'}</td>
+      <td>${l.km ? Math.round(l.km / 1000) + 'к' : '—'}</td>
+      <td>${fmtJPY(l.start)}</td>
+      <td>${bidEur ? fmtEUR(bidEur) : '—'}</td>
+      <td>${soldStr}</td>
+      <td>${gapStr}</td>
+      <td>${badge}</td>
+      <td style="white-space:nowrap">
+        <button class="delbtn" onclick="openEdit(this.dataset.id)" data-id="${l._id}" title="Редактировать" style="margin-right:2px">✎</button>
+        <button class="delbtn" onclick="del(this.dataset.id)" data-id="${l._id}" title="Удалить">×</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCards() {
+  const el = document.getElementById('cards');
+  if (!el) return;
+  if (!window.lots.length) { el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:2rem;font-size:13px">Нет лотов — вставь сообщения из Telegram</div>'; return; }
+  el.innerHTML = window.lots.map((l, i) => {
+    const bidEur = l.bid_eur || jpy2eur(l.bid_jpy) || 0;
+    const rate = l.rate_at_bid || getRate();
+    const soldTurnkey = l.sold ? calcTurnkey(l.sold, rate) : null;
+    const gap = (soldTurnkey && bidEur) ? (soldTurnkey - bidEur) : null;
+    const gapPct = (soldTurnkey && bidEur) ? (gap / soldTurnkey * 100) : null;
+    const status = l.status !== 'pending' ? l.status : (l.sold ? 'loss' : 'pending');
+    const badge = status === 'win'
+      ? '<span class="badge bw">Выиграли</span>'
+      : status === 'loss'
+      ? '<span class="badge bl">Не выиграли</span>'
+      : status === 'skip'
+      ? '<span class="badge bs">Не участвуем</span>'
+      : '<span class="badge bp">Ожидаем</span>';
+    const trimPill = l.trim
+      ? `<span class="trim-pill" style="background:${l.trim==='Rubicon'?'#e8f0fb':'#f0efed'};color:${l.trim==='Rubicon'?'#185fa5':'#555'}">${l.trim}</span>`
+      : '';
+    return `<div class="card">
+      <div class="card-top">
+        <div>
+          <div class="card-name">${l.lot}</div>
+        </div>
+        <div>
+          ${soldTurnkey ? `<div class="card-sold">${soldTurnkey.toLocaleString('ru')} €</div><div class="card-sold-sub">${fmtJPY(l.sold)}</div>` : '<div class="card-sold" style="color:var(--text3)">—</div>'}
+        </div>
+      </div>
+      <div class="card-meta">
+        ${trimPill}
+        ${l.engine ? `<span class="card-detail">${l.engine}</span>` : ''}
+        ${l.year ? `<span class="card-detail">· ${l.year}</span>` : ''}
+        ${l.km ? `<span class="card-detail">· ${Math.round(l.km/1000)}к км</span>` : ''}
+      </div>
+      <div class="card-bottom">
+        <div class="card-bid">${bidEur ? 'Ставка: ' + fmtEUR(bidEur) : l.start ? 'Старт: ' + fmtJPY(l.start) : '—'}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${gap !== null ? `<span class="card-gap ${gap<=0?'ok':''}">${gap>0?'+':''}${gap.toLocaleString('ru')} €<span class="card-gap-pct">${gapPct>0?'+':''}${gapPct.toFixed(1)}%</span></span>` : ''}
+          ${badge}
+          <button class="delbtn" onclick="openEdit('${l._id}')" title="Редактировать">✎</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function render() { renderStats(); renderTable(); renderCards(); }
+
+function openAdd() {
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('modalTitle').textContent = 'Добавить лот вручную';
+  document.getElementById('m_id').value = '';
+  document.getElementById('m_d').value = new Date().toISOString().split('T')[0];
+  ['m_l','m_y','m_k','m_s','m_be','m_sold'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('m_eng').value = '2.0L';
+  document.getElementById('m_trim').value = '';
+  document.getElementById('m_st').value = 'pending';
+}
+
+function openEdit(id) {
+  const l = window.lots.find(l => l._id === id);
+  if (!l) return;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('modalTitle').textContent = 'Редактировать лот';
+  document.getElementById('m_id').value = id;
+  document.getElementById('m_d').value = l.date ? l.date.split('.').reverse().join('-') : '';
+  document.getElementById('m_l').value = l.lot || '';
+  document.getElementById('m_eng').value = l.engine || '2.0L';
+  document.getElementById('m_trim').value = l.trim || '';
+  document.getElementById('m_y').value = l.year || '';
+  document.getElementById('m_k').value = l.km || '';
+  document.getElementById('m_s').value = l.start || '';
+  document.getElementById('m_be').value = l.bid_eur || '';
+  document.getElementById('m_sold').value = l.sold || '';
+  document.getElementById('m_st').value = l.status || 'pending';
+}
+
+function closeAdd() { document.getElementById('overlay').classList.remove('open'); }
+
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeAdd();
+});
+
+async function saveManual() {
+  const editId = document.getElementById('m_id').value;
+  const l = {
+    date: document.getElementById('m_d').value.split('-').reverse().join('.'),
+    lot: document.getElementById('m_l').value.trim(),
+    trim: document.getElementById('m_trim').value,
+    engine: document.getElementById('m_eng').value,
+    year: document.getElementById('m_y').value.trim(),
+    km: parseInt(document.getElementById('m_k').value) || 0,
+    start: parseInt(document.getElementById('m_s').value) || 0,
+    bid_eur: parseInt(document.getElementById('m_be').value) || 0,
+    bid_jpy: 0,
+    sold: parseInt(document.getElementById('m_sold').value) || null,
+    status: document.getElementById('m_st').value,
+    rate_at_bid: getRate()
+  };
+  if (!l.lot) { alert('Укажи номер лота'); return; }
+  if (editId) {
+    // Edit existing
+    l._id = editId;
+    const existing = window.lots.find(x => x._id === editId);
+    if (existing) l.rate_at_bid = existing.rate_at_bid || getRate();
+    await saveLot(l, window.lots.findIndex(x => x._id === editId));
+    showToast('Лот обновлён');
+  } else {
+    // Add new
+    await saveLot(l, window.lots.length);
+    showToast('Лот добавлен');
+  }
+  closeAdd();
+  ['m_l','m_y','m_k','m_s','m_be','m_sold'].forEach(id => document.getElementById(id).value = '');
+}
+
+async function parseTG() {
+  const txt = document.getElementById('tgIn').value.trim();
+  const res = document.getElementById('pr');
+  if (!txt) { res.className = 'pr err'; res.textContent = 'Вставь текст из Telegram'; return; }
+
+  let added = 0, updated = 0;
+  const LOT = '(\\d{3,6}\\s+(?:(?:HAA|ZIP|CAA|JU|USS|TAA|SAA|NAA|LAA|BAA|WAA|AAA|IAA|HERO|MIRIVE|ORIX|AUCNET)\\s+)?[A-Z][a-z]+)';
+  let m;
+
+  // Offers: lot + Start NNN JPY + first reg + km + fuel/engine
+  const offerRE = new RegExp(LOT + '\\s*\\nStart\\s+([\\d\\s]+)JPY[\\s\\S]*?(\\d{2}/\\d{4})\\s+first reg.*?([\\d\\s,]+)\\s*km.*?(petrol|diesel)', 'gi');
+  while ((m = offerRE.exec(txt)) !== null) {
+    const lid = m[1].trim();
+    const start = parseInt(m[2].replace(/\s/g, ''));
+    const year = m[3];
+    const km = parseInt(m[4].replace(/[\s,]/g, '').replace(/[^\d]/g, '')) || 0;
+    const snippet = txt.slice(Math.max(0, m.index), m.index + m[0].length + 200);
+    const engine = /3\.6/i.test(snippet) ? '3.6L' : '2.0L';
+    const trimMatch = /rubicon/i.test(snippet) ? 'Rubicon' : /sahara/i.test(snippet) ? 'Sahara' : /sport/i.test(snippet) ? 'Sport' : '';
+    // Parse bid from text: "Ставка 35000" or "ставка: 35 000"
+    const bidMatch = snippet.match(/[Сс]тавка[:\s]+(\d[\d\s]*\d|\d+)/);
+    let bid_eur = bidMatch ? parseInt(bidMatch[1].replace(/\s/g,'')) : 0;
+    if (bid_eur > 0 && bid_eur < 1000) bid_eur *= 1000;
+    const dm = txt.match(/\[(\d{2})\.(\d{2})\.(\d{4})/);
+    const date = dm ? `${dm[1]}.${dm[2]}.${dm[3]}` : new Date().toLocaleDateString('ru');
+    if (!window.lots.find(l => l.lot === lid)) {
+      window.lots.push({ date, lot: lid, trim: trimMatch, engine, year, km, start, bid_eur, bid_jpy: 0, sold: null, status: bid_eur ? 'pending' : 'pending', rate_at_bid: getRate() });
+      added++;
+    }
+  }
+
+  // Results: "LOT\nNNNk sold/not sold, our bid NNNk max"
+  const resRE = new RegExp(LOT + '\\s*\\n([\\d]+)k\\s+(sold|not\\s+sold),\\s*our bid\\s+([\\d]+)k\\s+max', 'gi');
+  while ((m = resRE.exec(txt)) !== null) {
+    const lid = m[1].trim();
+    const sold = parseInt(m[2]) * 1000;
+    const isSold = !/not/i.test(m[3]);
+    const bidJ = parseInt(m[4]) * 1000;
+    const ex = window.lots.find(l => l.lot === lid || lid.startsWith(l.lot.split(' ')[0]));
+    if (ex) {
+      ex.sold = sold; ex.status = isSold ? 'win' : 'loss';
+      if (!ex.bid_jpy) ex.bid_jpy = bidJ;
+      updated++;
+    } else {
+      const dm = txt.match(/\[(\d{2})\.(\d{2})\.(\d{4})/);
+      window.lots.push({ date: dm ? `${dm[1]}.${dm[2]}.${dm[3]}` : '', lot: lid, engine: '2.0L', year: '', km: 0, start: 0, bid_eur: 0, bid_jpy: bidJ, sold, status: isSold ? 'win' : 'loss' });
+      added++;
+    }
+  }
+
+  // Nego result
+  const negoRE = new RegExp(LOT + '\\s*\\nNego start at\\s+([\\d\\s]+)JPY.*?our bid\\s+([\\d\\s]+)JPY.*?max', 'gi');
+  while ((m = negoRE.exec(txt)) !== null) {
+    const lid = m[1].trim();
+    const sold = parseInt(m[2].replace(/\s/g, ''));
+    const bidJ = parseInt(m[3].replace(/\s/g, ''));
+    const ex = window.lots.find(l => l.lot === lid || lid.startsWith(l.lot.split(' ')[0]));
+    if (ex) { ex.sold = sold; ex.status = 'loss'; if (!ex.bid_jpy) ex.bid_jpy = bidJ; updated++; }
+  }
+
+  // Bid confirmations (EUR): "LOT\n45000"
+  const bidRE = new RegExp(LOT + '\\s*\\n(\\d{4,6})\\s*(?:\\n|$)', 'gi');
+  while ((m = bidRE.exec(txt)) !== null) {
+    const lid = m[1].trim();
+    const val = parseInt(m[2]);
+    if (val >= 20000 && val <= 100000) {
+      const ex = window.lots.find(l => l.lot === lid);
+      if (ex && !ex.bid_eur) { ex.bid_eur = val; updated++; }
+    }
+  }
+
+  // "Одна из" pattern
+  const oz = new RegExp('Одна из\\s*\\n' + LOT + '\\s*\\n(\\d{4,6})\\s*\\n' + LOT + '\\s*\\n(\\d{4,6})', 'i').exec(txt);
+  if (oz) {
+    [[oz[1].trim(), parseInt(oz[2])], [oz[3].trim(), parseInt(oz[4])]].forEach(([lid, eur]) => {
+      const ex = window.lots.find(l => l.lot === lid);
+      if (ex && !ex.bid_eur) { ex.bid_eur = eur; updated++; }
+    });
+  }
+
+  // Simple lot mention without full offer details
+  const simpleLotRE = new RegExp('^' + LOT + '\\s*$', 'gim');
+  while ((m = simpleLotRE.exec(txt)) !== null) {
+    const lid = m[1].trim();
+    if (!window.lots.find(l => l.lot === lid)) {
+      const dm = txt.match(/\[(\d{2})\.(\d{2})\.(\d{4})/);
+      const date = dm ? `${dm[1]}.${dm[2]}.${dm[3]}` : new Date().toLocaleDateString('ru');
+      window.lots.push({ date, lot: lid, trim: '', engine: '2.0L', year: '', km: 0, start: 0, bid_eur: 0, bid_jpy: 0, sold: null, status: 'pending' });
+      added++;
+    }
+  }
+
+  // "не участвуем" — scan all lines for this phrase near a lot number
+  const skipRE = /не участвуем/i;
+  if (skipRE.test(txt)) {
+    // find the most recently mentioned lot before this phrase
+    const skipIdx = txt.search(skipRE);
+    const before = txt.slice(0, skipIdx);
+    const lotMatches = [...before.matchAll(new RegExp(LOT, 'gi'))];
+    if (lotMatches.length) {
+      const lid = lotMatches[lotMatches.length - 1][1].trim();
+      const ex = window.lots.find(l => l.lot === lid || lid.startsWith(l.lot.split(' ')[0]));
+      if (ex && ex.status === 'pending') { ex.status = 'skip'; updated++; }
+    }
+  }
+
+
+  const total = added + updated;
+  if (!total) {
+    res.className = 'pr err';
+    res.textContent = 'Ничего не распознано. Проверь формат — лот должен начинаться с числа (напр. «80380 HAA Kobe»).';
+  } else {
+    await save();
+    res.className = 'pr ok';
+    res.textContent = `✓ Готово: добавлено ${added}, обновлено ${updated} лотов`;
+    document.getElementById('tgIn').value = '';
+    showToast(`Добавлено ${added}, обновлено ${updated}`);
+  }
+}
+
+document.getElementById('rateInput').addEventListener('input', render);
+fetchRate();
+render();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+</script>
+</body>
+</html>
